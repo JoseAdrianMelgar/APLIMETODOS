@@ -1,0 +1,12 @@
+# Ignorar el entorno virtual (es muy pesado para GitHub)
+venv/
+
+# Ignorar carpetas temporales de Python
+__pycache__/
+*.pyc
+
+# Ignorar configuración de VS Code
+.vscode/
+
+# Ignorar tu archivo de prueba personal
+prueba.py
