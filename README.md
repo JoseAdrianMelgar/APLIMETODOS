@@ -186,6 +186,71 @@ PENDING  →  RUNNING  →  DONE
 
 ---
 
+## Polling asíncrono
+
+Como la ejecución numérica es 100% asíncrona, el frontend implementa **polling automático cada 5 segundos** al endpoint `GET /api/jobs/{id}` después de crear un job. Esto permite detectar el cambio de estado sin necesidad de WebSockets ni que el usuario refresque la página.
+
+### Flujo de polling
+
+```
+[Usuario crea job]
+        ↓
+[POST /api/jobs] → respuesta inmediata { id, estado: "Pending" }
+        ↓
+[Hook useJobPolling arranca el intervalo]
+        ↓
+   ┌─── cada 5s ───────────────────────┐
+   │   GET /api/jobs/{id}              │
+   │   ¿Estado === "DONE" o "FAILED"?  │
+   │      NO → seguir polleando        │
+   │      SI → detener intervalo       │
+   └───────────────────────────────────┘
+        ↓
+[GET /api/jobs/{id}/iterations] → renderiza gráfica + tabla
+```
+
+### Implementación
+
+El polling vive en `frontend/src/hooks/useJobPolling.ts`. Características clave:
+
+- **Intervalo**: 5000 ms (constante `POLL_INTERVAL`).
+- **Auto-detención**: se detiene automáticamente cuando el estado pasa a `DONE` o `FAILED` (comparación case-insensitive porque la API inserta `Pending` y el worker actualiza a `DONE`/`FAILED` en mayúsculas).
+- **Cleanup**: el `useEffect` limpia el intervalo cuando el componente se desmonta o cambia el `jobId`, evitando memory leaks.
+- **Carga de iteraciones diferida**: las iteraciones se piden solo una vez al detectar `DONE`, no en cada poll.
+
+### Ejemplo simplificado del hook
+
+```typescript
+useEffect(() => {
+    if (!jobId) return;
+
+    const intervalo = setInterval(async () => {
+        const response = await fetch(`http://localhost:5000/api/jobs/${jobId}`);
+        const job = await response.json();
+        setJob(job);
+
+        const estado = job.estado?.toUpperCase();
+        if (estado === "DONE" || estado === "FAILED") {
+            clearInterval(intervalo);
+        }
+    }, 5000);
+
+    return () => clearInterval(intervalo);
+}, [jobId]);
+```
+
+### ¿Por qué polling y no WebSockets?
+
+El enunciado del proyecto solicita explícitamente polling cada 5 segundos por:
+
+1. **Simplicidad de la arquitectura**: no requiere un canal persistente bidireccional.
+2. **Compatibilidad con stateless REST**: la API .NET no necesita mantener conexiones abiertas.
+3. **Tolerancia a fallos**: si una petición de polling falla (red, reinicio del servicio), la siguiente reintentará automáticamente.
+4. **Carga predecible**: 1 request cada 5s por usuario activo es trivial para el servidor.
+
+---
+
+
 ## Detener el sistema
 
 ```bash
@@ -198,15 +263,22 @@ docker compose down -v
 
 ---
 
-## Autor
+## Autores
 
-**José Adrián Monterroso Melgar**
-Estudiante de Ingeniería en Sistemas
-Universidad Mariano Gálvez de Guatemala
+Proyecto desarrollado por estudiantes de Ingeniería en Sistemas de la Universidad Mariano Gálvez de Guatemala:
 
-GitHub: [@JoseAdrianMelgar](https://github.com/JoseAdrianMelgar)
+| Carnet | Nombre |
+|---|---|
+| 1790-24-14368 | José Adrián Monterroso Melgar |
+| 1790-24-26001 | Luis Enrique Escobar Vides |
+| 1790-24-26929 | Bayrón Esau Morales Mazariegos |
+| 1790-24-20456 | César Gustavo Castillo García |
+| 1790-24-15648 | Nathalie María Amalia Carbajal García |
+
+GitHub del proyecto: [JoseAdrianMelgar/APLIMETODOS](https://github.com/JoseAdrianMelgar/APLIMETODOS)
 
 ---
+
 
 ## Licencia
 
