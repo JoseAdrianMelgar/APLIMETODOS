@@ -1,12 +1,42 @@
-# Ignorar el entorno virtual (es muy pesado para GitHub)
-venv/
+﻿# === Secretos ===
+.env
+*.local
 
-# Ignorar carpetas temporales de Python
+# === .NET ===
+[Bb]in/
+[Oo]bj/
+[Dd]ebug/
+[Rr]elease/
+*.user
+*.suo
+*.cache
+.vs/
+*.pdb
+
+# === Python ===
 __pycache__/
-*.pyc
+*.py[cod]
+*.so
+venv/
+.venv/
+env/
+ENV/
+*.egg-info/
 
-# Ignorar configuración de VS Code
+# === Node / Frontend ===
+node_modules/
+dist/
+.vite/
+*.log
+npm-debug.log*
+.npm
+
+# === IDEs ===
 .vscode/
+.idea/
+*.swp
 
-# Ignorar tu archivo de prueba personal
-prueba.py
+# === Sistema operativo ===
+.DS_Store
+Thumbs.db
+desktop.ini

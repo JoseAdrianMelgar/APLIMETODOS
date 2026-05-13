@@ -1,0 +1,110 @@
+﻿services:
+  sqlserver:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: aplimetodos-sqlserver
+    environment:
+      ACCEPT_EULA: "Y"
+      MSSQL_SA_PASSWORD: "${SQL_PASSWORD}"
+      MSSQL_PID: "Developer"
+    ports:
+      - "1433:1433"
+    volumes:
+      - sqlserver-data:/var/opt/mssql
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/mssql-tools18/bin/sqlcmd -S localhost -U sa -P \"${SQL_PASSWORD}\" -C -Q 'SELECT 1' || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks:
+      - aplimetodos-net
+
+  sqlserver-init:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    container_name: aplimetodos-sqlserver-init
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+    volumes:
+      - ./db-init:/db-init
+    command: >
+      /opt/mssql-tools18/bin/sqlcmd
+      -S sqlserver -U sa -P "${SQL_PASSWORD}"
+      -C -i /db-init/init.sql
+    networks:
+      - aplimetodos-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: aplimetodos-redis
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+    networks:
+      - aplimetodos-net
+
+  api-dotnet:
+    build:
+      context: ./api-dotnet
+      dockerfile: Dockerfile
+    container_name: aplimetodos-api
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sqlserver-init:
+        condition: service_completed_successfully
+    environment:
+      ASPNETCORE_ENVIRONMENT: Production
+      ConnectionStrings__DefaultConnection: "Server=sqlserver,1433;Database=${SQL_DATABASE};User Id=sa;Password=${SQL_PASSWORD};TrustServerCertificate=True;Encrypt=False;"
+      ConnectionStrings__RedisConnection: "redis:6379"
+    ports:
+      - "5000:5000"
+    networks:
+      - aplimetodos-net
+
+  worker-python:
+    build:
+      context: ./worker-python
+      dockerfile: Dockerfile
+    container_name: aplimetodos-worker
+    depends_on:
+      sqlserver:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      sqlserver-init:
+        condition: service_completed_successfully
+    environment:
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      SQL_SERVER: sqlserver
+      SQL_DATABASE: "${SQL_DATABASE}"
+      SQL_USERNAME: sa
+      SQL_PASSWORD: "${SQL_PASSWORD}"
+    networks:
+      - aplimetodos-net
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: aplimetodos-frontend
+    depends_on:
+      - api-dotnet
+    ports:
+      - "5173:80"
+    networks:
+      - aplimetodos-net
+
+volumes:
+  sqlserver-data:
+
+networks:
+  aplimetodos-net:
+    driver: bridge
