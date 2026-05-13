@@ -25,7 +25,7 @@ class RedisQueue:
                 return int(job_id_str)
             return None
         except Exception as e:
-            print(f"❌ Error al tomar job de Redis: {e}")
+            print(f" Error al tomar job de Redis: {e}")
             return None
     
     def ping(self) -> bool:
