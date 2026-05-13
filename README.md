@@ -1,4 +1,4 @@
-# APLIMETODOS
+# APLIMETODOS.
 
 **Plataforma de Ejecución, Trazabilidad y Comparación de Métodos Numéricos con Arquitectura Híbrida**
 
@@ -59,6 +59,8 @@ No hace falta instalar .NET, Node, Python ni SQL Server. Todo corre dentro de co
 ---
 
 ## Inicio rápido
+> ⚠️ **Importante**: el archivo `.env` no está en el repositorio (contiene credenciales). Asegurate de copiar `.env.example` → `.env` antes de levantar Docker. Si te salteás este paso, SQL Server arranca con password vacío y la API tira error 500.
+
 
 ```bash
 # 1. Clonar el repositorio
