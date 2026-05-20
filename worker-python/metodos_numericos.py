@@ -1,6 +1,6 @@
 import sympy as sp
 import cmath
-
+import re  
 
 class MetodosNumericos:
     """
@@ -16,6 +16,17 @@ class MetodosNumericos:
     def __init__(self):
         # Símbolo simbólico reutilizable para sympy
         self.x = sp.symbols('x')
+    def _parse_funcion(self, funcion_str):  # ← misma indentación que __init__
+        """
+        Parsea la función con SymPy mapeando 'e' a la constante de Euler.
+        ...
+        """
+        funcion_procesada = re.sub(r'\be\b', 'E', funcion_str)
+        return sp.sympify(funcion_procesada)
+
+
+        
+        
 
     # =====================================================================
     # MÉTODO 1: NEWTON-RAPHSON (con paso a paso completo)
@@ -46,7 +57,7 @@ class MetodosNumericos:
 
         try:
             # ----- PREPARACIÓN: parsear función y derivada -----
-            f_expr = sp.sympify(funcion_str)
+            f_expr = self._parse_funcion(funcion_str)
 
             derivada_auto = derivada_str is None
             if derivada_auto:
@@ -385,7 +396,7 @@ class MetodosNumericos:
 
         try:
             # ----- PREPARACIÓN: parsear función -----
-            f_expr = sp.sympify(funcion_str)
+            f_expr = self._parse_funcion(funcion_str)
             # Usar cmath para soportar raíces complejas en la evaluación
             f = sp.lambdify(self.x, f_expr, 'math')
 
