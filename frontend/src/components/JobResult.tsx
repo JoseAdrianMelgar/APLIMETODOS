@@ -1,4 +1,4 @@
-import { Loader2, CheckCircle2, XCircle, Hash, Clock, Activity, TrendingDown, Sigma } from 'lucide-react';
+import { Loader2, CheckCircle2, XCircle, Hash, Clock, Activity, TrendingDown, Sigma, AlertTriangle } from 'lucide-react';
 import { useJobPolling } from '../hooks/useJobPolling';
 import type { NumericResult } from '../types/job';
 import {
@@ -16,10 +16,6 @@ interface JobResultProps {
   jobId: number | null;
 }
 
-/**
- * Animaciones reutilizables. Las inyectamos una sola vez via <style> al montar
- * el componente para no depender de plugins extra de Tailwind.
- */
 const animationStyles = `
   @keyframes fadeInUp {
     from { opacity: 0; transform: translateY(10px); }
@@ -41,6 +37,158 @@ const animationStyles = `
   .stagger-3    { animation-delay: 0.25s; opacity: 0; }
   .stagger-4    { animation-delay: 0.35s; opacity: 0; }
 `;
+
+/** Parsea el JSON de resultado de forma segura. Devuelve null si no hay o falla. */
+function parseResultado(raw: string | null): NumericResult | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error('Error parseando resultado:', e);
+    return null;
+  }
+}
+
+/** Gráfica de convergencia (error % vs iteración). Se muestra si hay iteraciones. */
+function ConvergenceChart({ resultado }: { resultado: NumericResult }) {
+  const chartData = (resultado.iteraciones ?? []).map((it) => {
+    const errVal =
+      typeof it.error === 'number'
+        ? it.error
+        : typeof it.error_maximo === 'number'
+          ? it.error_maximo
+          : 0;
+    return { iter: it.iteracion, error: Number(errVal.toFixed(6)) };
+  });
+
+  if (chartData.length === 0) return null;
+  const tolerancia = resultado.tolerancia;
+
+  return (
+    <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-4 fade-in-up stagger-4">
+      <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
+        <TrendingDown size={14} className="text-cyan-400" />
+        Convergencia (error % vs iteración)
+      </h3>
+      <ResponsiveContainer width="100%" height={220}>
+        <LineChart data={chartData} margin={{ top: 5, right: 16, left: 0, bottom: 8 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
+          <XAxis
+            dataKey="iter"
+            stroke="#94a3b8"
+            tick={{ fill: '#94a3b8', fontSize: 12 }}
+            label={{
+              value: 'Iteración',
+              position: 'insideBottom',
+              offset: -4,
+              fill: '#64748b',
+              fontSize: 12,
+            }}
+          />
+          <YAxis
+            stroke="#94a3b8"
+            tick={{ fill: '#94a3b8', fontSize: 12 }}
+            label={{
+              value: 'Error %',
+              angle: -90,
+              position: 'insideLeft',
+              fill: '#64748b',
+              fontSize: 12,
+            }}
+          />
+          <Tooltip
+            contentStyle={{
+              backgroundColor: '#0f172a',
+              border: '1px solid #334155',
+              borderRadius: '8px',
+              color: '#e2e8f0',
+            }}
+            labelStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
+            formatter={(value) => [`${value}%`, 'Error']}
+            labelFormatter={(label) => `Iteración ${label}`}
+          />
+          {typeof tolerancia === 'number' && tolerancia > 0 && (
+            <ReferenceLine
+              y={tolerancia}
+              stroke="#22c55e"
+              strokeDasharray="4 4"
+              label={{
+                value: `tol = ${tolerancia}%`,
+                fill: '#22c55e',
+                fontSize: 10,
+                position: 'insideTopRight',
+              }}
+            />
+          )}
+          <Line
+            type="monotone"
+            dataKey="error"
+            stroke="#22d3ee"
+            strokeWidth={2}
+            dot={{ fill: '#22d3ee', r: 4, strokeWidth: 0 }}
+            activeDot={{ r: 6, fill: '#67e8f9' }}
+            animationDuration={800}
+          />
+        </LineChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
+
+/** Tabla de iteraciones. Se muestra si hay iteraciones (parciales o completas). */
+function IterationsTable({ resultado }: { resultado: NumericResult }) {
+  if (!resultado.iteraciones || resultado.iteraciones.length === 0) return null;
+
+  return (
+    <div className="fade-in-up stagger-4">
+      <h3 className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+        <Activity size={14} className="text-cyan-400" />
+        Tabla de iteraciones
+      </h3>
+      <div className="bg-slate-900 rounded-lg overflow-hidden max-h-72 overflow-y-auto border border-slate-700">
+        <table className="w-full text-sm">
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className="px-3 py-2 text-left text-slate-300 font-semibold">i</th>
+              <th className="px-3 py-2 text-left text-slate-300 font-semibold">xᵢ</th>
+              <th className="px-3 py-2 text-left text-slate-300 font-semibold">error %</th>
+            </tr>
+          </thead>
+          <tbody>
+            {resultado.iteraciones.map((it) => {
+              let xi: string = '—';
+              if (typeof it.xi_nuevo === 'number') {
+                xi = it.xi_nuevo.toFixed(6);
+              } else if (typeof it.xi_nuevo === 'string') {
+                xi = it.xi_nuevo;
+              } else if (Array.isArray(it.x_nuevo)) {
+                xi = `[${it.x_nuevo.map((v) => v.toFixed(4)).join(', ')}]`;
+              }
+
+              const err =
+                typeof it.error === 'number'
+                  ? it.error.toFixed(4)
+                  : typeof it.error_maximo === 'number'
+                    ? it.error_maximo.toFixed(4)
+                    : '—';
+
+              return (
+                <tr
+                  key={it.iteracion}
+                  className="border-t border-slate-800 transition-colors hover:bg-slate-800/60"
+                >
+                  <td className="px-3 py-2 text-slate-400 font-mono">{it.iteracion}</td>
+                  <td className="px-3 py-2 font-mono text-slate-200">{xi}</td>
+                  <td className="px-3 py-2 font-mono text-cyan-300">{err}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+}
 
 function JobResult({ jobId }: JobResultProps) {
   const { job, error } = useJobPolling(jobId);
@@ -119,7 +267,12 @@ function JobResult({ jobId }: JobResultProps) {
   }
 
   // ----- ESTADO 5: fallo -----
+  // Ahora intentamos mostrar iteraciones/grafica parciales si el resultado
+  // alcanzo a traer alguna, ademas del mensaje de error.
   if (estado === 'failed') {
+    const resultado = parseResultado(job.resultado);
+    const hayParciales = !!resultado?.iteraciones?.length;
+
     return (
       <>
         <style>{animationStyles}</style>
@@ -131,44 +284,34 @@ function JobResult({ jobId }: JobResultProps) {
             Estado: <span className="font-mono">{job.estado}</span>
           </p>
           {job.errorMessage && (
-            <pre className="bg-slate-900 p-3 rounded text-sm text-red-300 overflow-auto whitespace-pre-wrap border border-red-900/50">
+            <pre className="bg-slate-900 p-3 rounded text-sm text-red-300 overflow-auto whitespace-pre-wrap border border-red-900/50 mb-4">
               {job.errorMessage}
             </pre>
+          )}
+
+          {hayParciales && resultado && (
+            <>
+              <div className="bg-amber-900/30 border border-amber-700/60 rounded-lg p-3 mb-4 flex items-start gap-2">
+                <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+                <p className="text-amber-300 text-sm">
+                  El job falló, pero se muestran las iteraciones que alcanzó a calcular antes del error.
+                </p>
+              </div>
+              <ConvergenceChart resultado={resultado} />
+              <IterationsTable resultado={resultado} />
+            </>
           )}
         </div>
       </>
     );
   }
 
-  // ----- ESTADO 6: completado con exito -----
+  // ----- ESTADO 6: completado (DONE) -----
   if (estado === 'done') {
-    let resultado: NumericResult | null = null;
-    try {
-      if (job.resultado) {
-        resultado = JSON.parse(job.resultado);
-      }
-    } catch (e) {
-      console.error('Error parseando resultado:', e);
-    }
+    const resultado = parseResultado(job.resultado);
+    const noConvergio = resultado ? resultado.convergio === false : false;
+    const sinIteraciones = !resultado?.iteraciones?.length;
 
-    // ----- Construir data para Recharts -----
-    // Mapea cada iteracion a { iter, error } para el grafico de convergencia.
-    const chartData = (resultado?.iteraciones ?? []).map((it) => {
-      const errVal =
-        typeof it.error === 'number'
-          ? it.error
-          : typeof it.error_maximo === 'number'
-            ? it.error_maximo
-            : 0;
-      return {
-        iter: it.iteracion,
-        error: Number(errVal.toFixed(6)),
-      };
-    });
-
-    const tolerancia = resultado?.tolerancia;
-
-    // ----- Formateo de la raiz (soporta numeros y strings - complejo de Muller) -----
     const formatRaiz = (raiz: number | string | undefined): string => {
       if (raiz === undefined || raiz === null) return '—';
       if (typeof raiz === 'number') return raiz.toString();
@@ -189,6 +332,21 @@ function JobResult({ jobId }: JobResultProps) {
               {job.estado}
             </span>
           </div>
+
+          {/* ----- BANNER: no convergió ----- */}
+          {noConvergio && (
+            <div className="bg-amber-900/30 border border-amber-700/60 rounded-lg p-3 mb-4 flex items-start gap-2 fade-in-up">
+              <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
+              <div>
+                <p className="text-amber-300 text-sm font-semibold">El método no convergió.</p>
+                <p className="text-amber-200/80 text-xs mt-0.5">
+                  {sinIteraciones
+                    ? 'El método se detuvo antes de generar iteraciones (ver mensaje abajo).'
+                    : 'Se alcanzó el máximo de iteraciones o se detuvo el cálculo. Abajo se muestran los datos parciales.'}
+                </p>
+              </div>
+            </div>
+          )}
 
           {/* ----- METRICAS ----- */}
           <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
@@ -219,7 +377,7 @@ function JobResult({ jobId }: JobResultProps) {
           </div>
 
           {/* ----- RAIZ (resultado principal) ----- */}
-          {resultado?.raiz !== undefined && (
+          {resultado?.raiz !== undefined && resultado?.raiz !== null && (
             <div className="bg-slate-900 p-4 rounded-lg border border-cyan-700 mb-4 fade-in-up stagger-4">
               <div className="flex items-center justify-between mb-1">
                 <p className="text-slate-500 text-xs">
@@ -249,129 +407,9 @@ function JobResult({ jobId }: JobResultProps) {
             </div>
           )}
 
-          {/* ----- GRAFICA DE CONVERGENCIA (RECHARTS) ----- */}
-          {chartData.length > 0 && (
-            <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-4 fade-in-up stagger-4">
-              <h3 className="text-sm font-bold text-slate-300 mb-3 flex items-center gap-2">
-                <TrendingDown size={14} className="text-cyan-400" />
-                Convergencia (error % vs iteración)
-              </h3>
-              <ResponsiveContainer width="100%" height={220}>
-                <LineChart data={chartData} margin={{ top: 5, right: 16, left: 0, bottom: 8 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="#334155" />
-                  <XAxis
-                    dataKey="iter"
-                    stroke="#94a3b8"
-                    tick={{ fill: '#94a3b8', fontSize: 12 }}
-                    label={{
-                      value: 'Iteración',
-                      position: 'insideBottom',
-                      offset: -4,
-                      fill: '#64748b',
-                      fontSize: 12,
-                    }}
-                  />
-                  <YAxis
-                    stroke="#94a3b8"
-                    tick={{ fill: '#94a3b8', fontSize: 12 }}
-                    label={{
-                      value: 'Error %',
-                      angle: -90,
-                      position: 'insideLeft',
-                      fill: '#64748b',
-                      fontSize: 12,
-                    }}
-                  />
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#0f172a',
-                      border: '1px solid #334155',
-                      borderRadius: '8px',
-                      color: '#e2e8f0',
-                    }}
-                    labelStyle={{ color: '#22d3ee', fontWeight: 'bold' }}
-                    formatter={(value) => [`${value}%`, 'Error']}
-                    labelFormatter={(label) => `Iteración ${label}`}
-                  />
-                  {/* Linea de tolerancia para visualizar el umbral de convergencia */}
-                  {typeof tolerancia === 'number' && tolerancia > 0 && (
-                    <ReferenceLine
-                      y={tolerancia}
-                      stroke="#22c55e"
-                      strokeDasharray="4 4"
-                      label={{
-                        value: `tol = ${tolerancia}%`,
-                        fill: '#22c55e',
-                        fontSize: 10,
-                        position: 'insideTopRight',
-                      }}
-                    />
-                  )}
-                  <Line
-                    type="monotone"
-                    dataKey="error"
-                    stroke="#22d3ee"
-                    strokeWidth={2}
-                    dot={{ fill: '#22d3ee', r: 4, strokeWidth: 0 }}
-                    activeDot={{ r: 6, fill: '#67e8f9' }}
-                    animationDuration={800}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {/* ----- TABLA DE ITERACIONES ----- */}
-          {resultado?.iteraciones && resultado.iteraciones.length > 0 && (
-            <div className="fade-in-up stagger-4">
-              <h3 className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
-                <Activity size={14} className="text-cyan-400" />
-                Tabla de iteraciones
-              </h3>
-              <div className="bg-slate-900 rounded-lg overflow-hidden max-h-72 overflow-y-auto border border-slate-700">
-                <table className="w-full text-sm">
-                  <thead className="bg-slate-800 sticky top-0 z-10">
-                    <tr>
-                      <th className="px-3 py-2 text-left text-slate-300 font-semibold">i</th>
-                      <th className="px-3 py-2 text-left text-slate-300 font-semibold">xᵢ</th>
-                      <th className="px-3 py-2 text-left text-slate-300 font-semibold">error %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {resultado.iteraciones.map((it) => {
-                      // El xi puede venir como numero (escalar), string (Muller complejo) o array (Gauss-Seidel)
-                      let xi: string = '—';
-                      if (typeof it.xi_nuevo === 'number') {
-                        xi = it.xi_nuevo.toFixed(6);
-                      } else if (typeof it.xi_nuevo === 'string') {
-                        xi = it.xi_nuevo;
-                      } else if (Array.isArray(it.x_nuevo)) {
-                        xi = `[${it.x_nuevo.map((v) => v.toFixed(4)).join(', ')}]`;
-                      }
-
-                      const err =
-                        typeof it.error === 'number'
-                          ? it.error.toFixed(4)
-                          : typeof it.error_maximo === 'number'
-                            ? it.error_maximo.toFixed(4)
-                            : '—';
-
-                      return (
-                        <tr
-                          key={it.iteracion}
-                          className="border-t border-slate-800 transition-colors hover:bg-slate-800/60"
-                        >
-                          <td className="px-3 py-2 text-slate-400 font-mono">{it.iteracion}</td>
-                          <td className="px-3 py-2 font-mono text-slate-200">{xi}</td>
-                          <td className="px-3 py-2 font-mono text-cyan-300">{err}</td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
+          {/* ----- GRAFICA + TABLA (parciales o completas) ----- */}
+          {resultado && <ConvergenceChart resultado={resultado} />}
+          {resultado && <IterationsTable resultado={resultado} />}
 
           {/* ----- MENSAJE FINAL ----- */}
           {resultado?.mensaje && (
@@ -385,4 +423,4 @@ function JobResult({ jobId }: JobResultProps) {
   return null;
 }
 
-export default JobResult;
+export default JobResult; 
