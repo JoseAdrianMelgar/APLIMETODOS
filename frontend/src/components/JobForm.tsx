@@ -1,15 +1,13 @@
 import { useState } from 'react';
+import { XCircle } from 'lucide-react';
 import axios from 'axios';
 
 type Method = 'newton-raphson' | 'secante' | 'muller';
 
 interface JobFormProps {
-  // El padre (Raices.tsx) recibe el ID del job recien creado
-  // para empezar a hacer polling y mostrar el resultado.
   onJobCreated: (jobId: number) => void;
 }
 
-// Errores de validacion por campo. Si una clave existe, ese campo es invalido.
 interface Errores {
   funcion?: string;
   x0?: string;
@@ -19,20 +17,15 @@ interface Errores {
   maxIter?: string;
 }
 
-// Funciones matematicas conocidas que SymPy entiende. Se quitan antes de
-// validar caracteres para no marcar 'sin', 'cos', etc. como invalidos.
 const FUNCIONES_CONOCIDAS = /\b(sqrt|asin|acos|atan|sinh|cosh|tanh|sin|cos|tan|exp|log|ln|abs|pi)\b/gi;
 
-/**
- * Parsea un numero soportando:
- *   - coma decimal (Windows en espanol): "0,001" -> 0.001
- *   - notacion cientifica nativa: "1e-6" -> 0.000001
- *   - notacion de potencia: "10^-6" o "10**-6" -> 0.000001
- * Devuelve NaN si no es parseable.
- */
+// Largo máximo de la función (debe coincidir con MAX_FUNC_LEN del worker)
+const MAX_FUNC_LEN = 120;
+// Tope de iteraciones (debe coincidir con MAX_ITER_CAP del worker)
+const MAX_ITER = 1000;
+
 const parseNumero = (s: string): number => {
   const limpio = s.trim().replace(',', '.');
-  // Detectar "base^exp" o "base**exp" (ej. 10^-6)
   const potencia = limpio.match(/^(-?\d+(?:\.\d+)?)\s*(?:\^|\*\*)\s*(-?\d+(?:\.\d+)?)$/);
   if (potencia) {
     return Math.pow(parseFloat(potencia[1]), parseFloat(potencia[2]));
@@ -51,24 +44,24 @@ function JobForm({ onJobCreated }: JobFormProps) {
   const [tol, setTol] = useState('0.001');
   const [maxIter, setMaxIter] = useState('50');
   const [enviando, setEnviando] = useState(false);
+  // Error de la API (reemplaza el alert() nativo — bug 10)
+  const [errorApi, setErrorApi] = useState<string | null>(null);
 
-  // Control de cuando mostrar cada error: tras tocar el campo (blur) o tras
-  // intentar enviar. Asi no llenamos de rojo el formulario apenas se abre.
   const [touched, setTouched] = useState<Record<string, boolean>>({});
   const [intentoSubmit, setIntentoSubmit] = useState(false);
 
-  // Helpers de visibilidad: cada metodo necesita distintos valores iniciales.
   const necesitaX1 = method === 'secante' || method === 'muller';
   const necesitaX2 = method === 'muller';
 
-  // ----- VALIDACION (pura, en funcion del estado actual) -----
   const validar = (): Errores => {
     const e: Errores = {};
 
-    // Funcion f(x)
     const f = funcion.trim();
     if (!f) {
       e.funcion = 'Ingresá una función.';
+    } else if (f.length > MAX_FUNC_LEN) {
+      // bug 4 (frontend): función absurdamente larga
+      e.funcion = `La función es demasiado larga (máx. ${MAX_FUNC_LEN} caracteres, actual: ${f.length}).`;
     } else if (!/x/i.test(f)) {
       e.funcion = 'La función debe depender de x (ej. x^2 - 4).';
     } else {
@@ -78,10 +71,8 @@ function JobForm({ onJobCreated }: JobFormProps) {
       }
     }
 
-    // x0
     if (!esNumeroValido(x0)) e.x0 = 'Debe ser un número válido (ej. 1.5).';
 
-    // x1 (Secante y Müller)
     if (necesitaX1) {
       if (!esNumeroValido(x1)) {
         e.x1 = 'Debe ser un número válido.';
@@ -90,7 +81,6 @@ function JobForm({ onJobCreated }: JobFormProps) {
       }
     }
 
-    // x2 (solo Müller)
     if (necesitaX2) {
       if (!esNumeroValido(x2)) {
         e.x2 = 'Debe ser un número válido.';
@@ -102,35 +92,32 @@ function JobForm({ onJobCreated }: JobFormProps) {
       }
     }
 
-    // Tolerancia
     if (!esNumeroValido(tol)) {
       e.tol = 'Tolerancia inválida (ej. 0.001, 1e-6 o 10^-6).';
     } else if (parseNumero(tol) <= 0) {
       e.tol = 'La tolerancia debe ser mayor que 0.';
     }
 
-    // Max iteraciones
+    // bug 4 (frontend): capar maxIter a 1000
     const mi = parseInt(maxIter, 10);
-    if (!Number.isInteger(mi) || mi < 1) {
-      e.maxIter = 'Debe ser un entero mayor o igual a 1.';
+    if (!Number.isInteger(mi) || mi < 1 || mi > MAX_ITER) {
+      e.maxIter = `Debe ser un entero entre 1 y ${MAX_ITER}.`;
     }
 
     return e;
   };
 
   const errores = validar();
-  // Mostrar el error de un campo solo si fue tocado o ya se intento enviar.
   const mostrar = (campo: keyof Errores): boolean =>
     (touched[campo] || intentoSubmit) && !!errores[campo];
-
   const marcarTocado = (campo: string) =>
     setTouched((prev) => ({ ...prev, [campo]: true }));
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     setIntentoSubmit(true);
+    setErrorApi(null); // limpiar error previo de API
 
-    // Si hay errores, NO se crea el job (esto era lo que pedía QA).
     if (Object.keys(errores).length > 0) return;
 
     setEnviando(true);
@@ -143,37 +130,34 @@ function JobForm({ onJobCreated }: JobFormProps) {
       tol: parseNumero(tol),
       max_iter: parseInt(maxIter, 10),
     };
-
-    if (necesitaX1) {
-      parametros.x1 = parseNumero(x1);
-    }
-    if (necesitaX2) {
-      parametros.x2 = parseNumero(x2);
-    }
+    if (necesitaX1) parametros.x1 = parseNumero(x1);
+    if (necesitaX2) parametros.x2 = parseNumero(x2);
 
     try {
       const respuesta = await axios.post('http://localhost:5000/api/jobs', {
         Metodo: method,
         Parametros: parametros,
       });
-
-      // Notificar al padre con el ID generado por SQL Server
       onJobCreated(respuesta.data.id);
     } catch (error) {
-      let mensaje = 'Error desconocido';
+      // bug 10 (frontend): reemplazar alert() con mensaje inline
+      let mensaje = 'Error desconocido.';
       if (axios.isAxiosError(error)) {
-        mensaje = error.response?.data?.error || error.message;
+        if (error.code === 'ERR_NETWORK' || error.message === 'Network Error') {
+          mensaje = 'No se pudo conectar con la API. Verificá que los contenedores estén corriendo (docker compose up).';
+        } else {
+          mensaje = error.response?.data?.error || error.message;
+        }
       } else if (error instanceof Error) {
         mensaje = error.message;
       }
       console.error('Error al crear el Job:', error);
-      alert(`Error al crear el Job:\n${mensaje}`);
+      setErrorApi(mensaje);
     } finally {
       setEnviando(false);
     }
   };
 
-  // className del input segun tenga error visible o no
   const inputClass = (hayError: boolean) =>
     `w-full bg-slate-900 border rounded p-2 outline-none ${
       hayError
@@ -224,7 +208,8 @@ function JobForm({ onJobCreated }: JobFormProps) {
             <p className="text-xs text-red-400 mt-1">{errores.funcion}</p>
           ) : (
             <p className="text-xs text-slate-500 mt-1">
-              Usá <code>^</code> para potencias. Funciones: <code>exp(x)</code>, <code>sin(x)</code>, <code>cos(x)</code>, <code>log(x)</code>. También <code>e^x</code>.
+              Usá <code>^</code> para potencias. Funciones: <code>exp(x)</code>, <code>sin(x)</code>,{' '}
+              <code>cos(x)</code>, <code>log(x)</code>. También <code>e^x</code>. Máx. {MAX_FUNC_LEN} caracteres.
             </p>
           )}
         </div>
@@ -243,7 +228,7 @@ function JobForm({ onJobCreated }: JobFormProps) {
           {mostrar('x0') && <p className="text-xs text-red-400 mt-1">{errores.x0}</p>}
         </div>
 
-        {/* x1 - solo para Secante y Müller */}
+        {/* x1 */}
         {necesitaX1 && (
           <div>
             <label className="block text-sm mb-1">Valor inicial x₁</label>
@@ -259,7 +244,7 @@ function JobForm({ onJobCreated }: JobFormProps) {
           </div>
         )}
 
-        {/* x2 - solo para Müller */}
+        {/* x2 */}
         {necesitaX2 && (
           <div>
             <label className="block text-sm mb-1">Valor inicial x₂</label>
@@ -302,13 +287,28 @@ function JobForm({ onJobCreated }: JobFormProps) {
             type="number"
             step="1"
             min="1"
+            max={MAX_ITER}
             value={maxIter}
             onChange={(e) => setMaxIter(e.target.value)}
             onBlur={() => marcarTocado('maxIter')}
             className={inputClass(mostrar('maxIter'))}
           />
-          {mostrar('maxIter') && <p className="text-xs text-red-400 mt-1">{errores.maxIter}</p>}
+          {mostrar('maxIter') ? (
+            <p className="text-xs text-red-400 mt-1">{errores.maxIter}</p>
+          ) : (
+            <p className="text-xs text-slate-500 mt-1">
+              Acepta entre 1 y {MAX_ITER}.
+            </p>
+          )}
         </div>
+
+        {/* Error inline de la API (bug 10: reemplaza el alert nativo) */}
+        {errorApi && (
+          <div className="bg-red-900/30 border border-red-700/60 rounded-lg p-3 flex items-start gap-2">
+            <XCircle size={14} className="text-red-400 mt-0.5 shrink-0" />
+            <p className="text-red-300 text-sm">{errorApi}</p>
+          </div>
+        )}
 
         {/* Botón */}
         <button

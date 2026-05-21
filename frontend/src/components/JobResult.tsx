@@ -38,7 +38,6 @@ const animationStyles = `
   .stagger-4    { animation-delay: 0.35s; opacity: 0; }
 `;
 
-/** Parsea el JSON de resultado de forma segura. Devuelve null si no hay o falla. */
 function parseResultado(raw: string | null): NumericResult | null {
   if (!raw) return null;
   try {
@@ -49,7 +48,7 @@ function parseResultado(raw: string | null): NumericResult | null {
   }
 }
 
-/** Gráfica de convergencia (error % vs iteración). Se muestra si hay iteraciones. */
+/** Gráfica de convergencia (error % vs iteración). */
 function ConvergenceChart({ resultado }: { resultado: NumericResult }) {
   const chartData = (resultado.iteraciones ?? []).map((it) => {
     const errVal =
@@ -62,6 +61,32 @@ function ConvergenceChart({ resultado }: { resultado: NumericResult }) {
   });
 
   if (chartData.length === 0) return null;
+
+  // bug 2: un solo punto no dibuja línea — mostrar resumen textual en su lugar
+  if (chartData.length === 1) {
+    return (
+      <div className="bg-slate-900 p-4 rounded-lg border border-slate-700 mb-4 fade-in-up stagger-4">
+        <h3 className="text-sm font-bold text-slate-300 mb-2 flex items-center gap-2">
+          <TrendingDown size={14} className="text-cyan-400" />
+          Convergencia (error % vs iteración)
+        </h3>
+        <p className="text-slate-500 text-xs mb-3">
+          Solo una iteración completada — no hay curva que graficar.
+        </p>
+        <div className="flex items-center gap-6 bg-slate-800 rounded-lg p-3">
+          <div>
+            <p className="text-slate-500 text-xs">Iteración</p>
+            <p className="text-slate-200 font-mono text-lg">{chartData[0].iter}</p>
+          </div>
+          <div>
+            <p className="text-slate-500 text-xs">Error %</p>
+            <p className="text-cyan-300 font-mono text-lg">{chartData[0].error}%</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const tolerancia = resultado.tolerancia;
 
   return (
@@ -135,7 +160,7 @@ function ConvergenceChart({ resultado }: { resultado: NumericResult }) {
   );
 }
 
-/** Tabla de iteraciones. Se muestra si hay iteraciones (parciales o completas). */
+/** Tabla de iteraciones (parciales o completas). */
 function IterationsTable({ resultado }: { resultado: NumericResult }) {
   if (!resultado.iteraciones || resultado.iteraciones.length === 0) return null;
 
@@ -193,7 +218,7 @@ function IterationsTable({ resultado }: { resultado: NumericResult }) {
 function JobResult({ jobId }: JobResultProps) {
   const { job, error } = useJobPolling(jobId);
 
-  // ----- ESTADO 1: aun no se ha creado ningun job -----
+  // ----- sin job -----
   if (!jobId) {
     return (
       <>
@@ -210,7 +235,7 @@ function JobResult({ jobId }: JobResultProps) {
     );
   }
 
-  // ----- ESTADO 2: cargando primera respuesta -----
+  // ----- cargando primera respuesta -----
   if (!job && !error) {
     return (
       <>
@@ -223,7 +248,7 @@ function JobResult({ jobId }: JobResultProps) {
     );
   }
 
-  // ----- ESTADO 3: error de red -----
+  // ----- error de red (bug 10: muestra info útil en vez de pantalla en blanco) -----
   if (error) {
     return (
       <>
@@ -232,9 +257,9 @@ function JobResult({ jobId }: JobResultProps) {
           <h2 className="text-xl font-bold mb-2 text-red-400 flex items-center gap-2">
             <XCircle size={20} /> Error de conexión
           </h2>
-          <p className="text-slate-300">{error}</p>
-          <p className="text-slate-500 text-sm mt-2">
-            Verificá que la API esté corriendo en localhost:5000.
+          <p className="text-slate-300 mb-2">{error}</p>
+          <p className="text-slate-500 text-sm">
+            Verificá que la API esté corriendo en localhost:5000 y que los contenedores estén activos.
           </p>
         </div>
       </>
@@ -244,7 +269,7 @@ function JobResult({ jobId }: JobResultProps) {
   if (!job) return null;
   const estado = job.estado.toLowerCase();
 
-  // ----- ESTADO 4: pendiente o corriendo (polling activo) -----
+  // ----- pending / running -----
   if (estado === 'pending' || estado === 'running') {
     return (
       <>
@@ -266,9 +291,7 @@ function JobResult({ jobId }: JobResultProps) {
     );
   }
 
-  // ----- ESTADO 5: fallo -----
-  // Ahora intentamos mostrar iteraciones/grafica parciales si el resultado
-  // alcanzo a traer alguna, ademas del mensaje de error.
+  // ----- failed -----
   if (estado === 'failed') {
     const resultado = parseResultado(job.resultado);
     const hayParciales = !!resultado?.iteraciones?.length;
@@ -293,9 +316,14 @@ function JobResult({ jobId }: JobResultProps) {
             <>
               <div className="bg-amber-900/30 border border-amber-700/60 rounded-lg p-3 mb-4 flex items-start gap-2">
                 <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
-                <p className="text-amber-300 text-sm">
-                  El job falló, pero se muestran las iteraciones que alcanzó a calcular antes del error.
-                </p>
+                <div>
+                  <p className="text-amber-300 text-sm font-semibold">
+                    El job falló, pero se muestran las iteraciones que alcanzó a calcular.
+                  </p>
+                  {resultado.mensaje && (
+                    <p className="text-amber-200/80 text-xs mt-1">{resultado.mensaje}</p>
+                  )}
+                </div>
               </div>
               <ConvergenceChart resultado={resultado} />
               <IterationsTable resultado={resultado} />
@@ -306,7 +334,7 @@ function JobResult({ jobId }: JobResultProps) {
     );
   }
 
-  // ----- ESTADO 6: completado (DONE) -----
+  // ----- done -----
   if (estado === 'done') {
     const resultado = parseResultado(job.resultado);
     const noConvergio = resultado ? resultado.convergio === false : false;
@@ -315,7 +343,7 @@ function JobResult({ jobId }: JobResultProps) {
     const formatRaiz = (raiz: number | string | undefined): string => {
       if (raiz === undefined || raiz === null) return '—';
       if (typeof raiz === 'number') return raiz.toString();
-      return raiz; // string como "1j" o "(1+2j)"
+      return raiz;
     };
 
     return (
@@ -323,7 +351,7 @@ function JobResult({ jobId }: JobResultProps) {
         <style>{animationStyles}</style>
         <div className="bg-slate-800 p-6 rounded-xl border border-green-700 shadow-xl min-h-[500px] fade-in-up">
 
-          {/* ----- HEADER ----- */}
+          {/* HEADER */}
           <div className="flex items-center justify-between mb-4">
             <h2 className="text-xl font-bold text-green-400 flex items-center gap-2">
               <CheckCircle2 size={20} /> Job #{job.id} completado
@@ -333,22 +361,33 @@ function JobResult({ jobId }: JobResultProps) {
             </span>
           </div>
 
-          {/* ----- BANNER: no convergió ----- */}
+          {/*
+            bug 1: el banner ahora muestra el mensaje EXACTO del worker.
+            Así el usuario entiende por qué la tabla tiene N filas pero el
+            error ocurrió en la iteración N+1 (ej. "Derivada cercana a cero
+            en iteracion 2" con 1 fila en la tabla).
+          */}
           {noConvergio && (
             <div className="bg-amber-900/30 border border-amber-700/60 rounded-lg p-3 mb-4 flex items-start gap-2 fade-in-up">
               <AlertTriangle size={16} className="text-amber-400 mt-0.5 shrink-0" />
               <div>
                 <p className="text-amber-300 text-sm font-semibold">El método no convergió.</p>
-                <p className="text-amber-200/80 text-xs mt-0.5">
-                  {sinIteraciones
-                    ? 'El método se detuvo antes de generar iteraciones (ver mensaje abajo).'
-                    : 'Se alcanzó el máximo de iteraciones o se detuvo el cálculo. Abajo se muestran los datos parciales.'}
-                </p>
+                {resultado?.mensaje ? (
+                  <p className="text-amber-200/80 text-xs mt-1">{resultado.mensaje}</p>
+                ) : sinIteraciones ? (
+                  <p className="text-amber-200/80 text-xs mt-1">
+                    El método se detuvo antes de generar iteraciones.
+                  </p>
+                ) : (
+                  <p className="text-amber-200/80 text-xs mt-1">
+                    Se alcanzó el máximo de iteraciones. Abajo se muestran los datos parciales.
+                  </p>
+                )}
               </div>
             </div>
           )}
 
-          {/* ----- METRICAS ----- */}
+          {/* MÉTRICAS */}
           <div className="grid grid-cols-2 gap-3 mb-4 text-sm">
             <div className="bg-slate-900 p-3 rounded-lg fade-in-up stagger-1 transition-colors hover:bg-slate-900/70">
               <p className="text-slate-500 text-xs flex items-center gap-1">
@@ -376,7 +415,7 @@ function JobResult({ jobId }: JobResultProps) {
             </div>
           </div>
 
-          {/* ----- RAIZ (resultado principal) ----- */}
+          {/* RAÍZ */}
           {resultado?.raiz !== undefined && resultado?.raiz !== null && (
             <div className="bg-slate-900 p-4 rounded-lg border border-cyan-700 mb-4 fade-in-up stagger-4">
               <div className="flex items-center justify-between mb-1">
@@ -395,7 +434,7 @@ function JobResult({ jobId }: JobResultProps) {
             </div>
           )}
 
-          {/* ----- SOLUCION (vector, para Gauss-Seidel y similares) ----- */}
+          {/* SOLUCIÓN VECTORIAL (Gauss-Seidel y futuros sistemas) */}
           {resultado?.solucion && (
             <div className="bg-slate-900 p-4 rounded-lg border border-cyan-700 mb-4 fade-in-up stagger-4">
               <p className="text-slate-500 text-xs mb-2">Vector solución</p>
@@ -407,12 +446,16 @@ function JobResult({ jobId }: JobResultProps) {
             </div>
           )}
 
-          {/* ----- GRAFICA + TABLA (parciales o completas) ----- */}
+          {/* GRÁFICA + TABLA */}
           {resultado && <ConvergenceChart resultado={resultado} />}
           {resultado && <IterationsTable resultado={resultado} />}
 
-          {/* ----- MENSAJE FINAL ----- */}
-          {resultado?.mensaje && (
+          {/*
+            Mensaje al fondo: solo cuando convergió.
+            Cuando NO convergió ya se muestra en el banner de arriba
+            para evitar repetición y dar contexto justo al lado de la tabla.
+          */}
+          {resultado?.mensaje && resultado?.convergio && (
             <p className="text-slate-500 text-xs mt-4 italic">{resultado.mensaje}</p>
           )}
         </div>
@@ -423,4 +466,4 @@ function JobResult({ jobId }: JobResultProps) {
   return null;
 }
 
-export default JobResult; 
+export default JobResult;

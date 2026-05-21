@@ -17,6 +17,31 @@ class DatabaseManager:
             print(f"❌ Error conectando a SQL Server: {e}")
             raise
 
+    def ensure_connection(self):
+        """
+        Verifica que la conexión esté viva y reconecta si está caída.
+
+        Esta es la pieza clave contra el bug de 'todos los jobs en Pending para
+        siempre': si la conexión a SQL muere (colapso parcial), el worker la
+        recupera en vez de quedar inutilizado.
+        """
+        try:
+            if self.conn is None:
+                self.connect()
+                return
+            cursor = self.conn.cursor()
+            cursor.execute("SELECT 1")
+            cursor.fetchone()
+        except Exception:
+            print("⚠️ Conexión a SQL perdida. Reconectando...")
+            try:
+                if self.conn:
+                    self.conn.close()
+            except Exception:
+                pass
+            self.conn = None
+            self.connect()
+
     def close(self):
         """Cierra la conexión"""
         if self.conn:
@@ -74,23 +99,12 @@ class DatabaseManager:
     def save_result(self, job_id: int, resultado: Dict[str, Any],
                     tiempo_ms: int):
         """
-        Guarda el resultado final del job.
-
-        CAMBIO IMPORTANTE: ahora se guarda el resultado COMPLETO (incluyendo
-        el array de iteraciones, mensaje, tolerancia, raiz_es_compleja, etc.)
-        para que el frontend pueda renderizar la grafica de convergencia y
-        la tabla de iteraciones desde el campo Resultado directamente.
-
-        Las iteraciones tambien se guardan en la tabla JobIterations (eso
-        sigue intacto), pero el frontend lee de aqui por practicidad.
+        Guarda el resultado final del job (completo, con iteraciones, para que
+        el frontend renderice grafica + tabla desde el campo Resultado).
         """
         cursor = self.conn.cursor()
 
         converged = resultado.get('convergio', False)
-
-        # Serializar TODO el resultado tal como viene del metodo numerico.
-        # default=str es un cinturon de seguridad por si aparece algun tipo
-        # no serializable directamente (ej. expresiones sympy o numeros complejos).
         resultado_json = json.dumps(resultado, default=str, ensure_ascii=False)
 
         cursor.execute("""
@@ -123,7 +137,6 @@ class DatabaseManager:
         """Guarda una iteración en la tabla JobIterations"""
         cursor = self.conn.cursor()
 
-        # Convertir xi a string si es necesario
         xi_str = str(xi) if xi is not None else None
 
         cursor.execute("""
