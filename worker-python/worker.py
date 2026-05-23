@@ -84,18 +84,29 @@ class NumericWorker:
 
             print(f"  Metodo: '{metodo_original}' -> '{metodo}'")
             print(f"  Parametros: {params}")
-
             resultado = self._ejecutar_metodo(metodo, params)
             self._guardar_iteraciones(job_id, resultado, metodo_original)
 
             elapsed_ms = int((time.time() - start_time) * 1000)
-            self.db.save_result(job_id, resultado, elapsed_ms)
 
-            valor_final = resultado.get('raiz', resultado.get('solucion', 'N/A'))
-            print(f"OK Job {job_id} completado en {elapsed_ms}ms")
-            print(f"   Convergio: {resultado.get('convergio')}")
-            print(f"   Resultado: {valor_final}")
-            print(f"   Total pasos: {resultado.get('total_iteraciones', 0)}")
+            # Deteccion de fallo matematico (seccion 5.2 del enunciado):
+            # si el metodo no produjo resultado valido (matriz singular,
+            # division por cero, diagonal con ceros, expresion invalida),
+            # tanto 'raiz' como 'solucion' vienen en None -> el job es FAILED.
+            es_fallo = resultado.get('raiz') is None and resultado.get('solucion') is None
+
+            if es_fallo:
+                error_msg = resultado.get('mensaje', 'El metodo no produjo un resultado valido.')
+                self.db.save_failed_job(job_id, error_msg)
+                print(f"FAILED Job {job_id} en {elapsed_ms}ms: {error_msg}")
+            else:
+                self.db.save_result(job_id, resultado, elapsed_ms)
+                valor_final = resultado.get('raiz', resultado.get('solucion', 'N/A'))
+                print(f"OK Job {job_id} completado en {elapsed_ms}ms")
+                print(f"   Convergio: {resultado.get('convergio')}")
+                print(f"   Resultado: {valor_final}")
+                print(f"   Total pasos: {resultado.get('total_iteraciones', 0)}")
+
 
         except Exception as e:
             error_msg = f"{type(e).__name__}: {str(e)}"
