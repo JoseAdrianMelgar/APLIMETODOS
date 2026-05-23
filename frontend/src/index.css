@@ -1,1 +1,31 @@
 @import "tailwindcss";
+:root {
+  --bg: #F3ECDD;        --surface: #FBF9F4;   --surface-2: #F1E9D8;
+  --ink: #1E3A5F;       --ink-soft: #5B6B7E;  --accent: #C8924C;
+  --accent-soft: #EBD9BE; --border: #E5D9C3;  --nav: #1E3A5F;
+  --nav-ink: #F3ECDD;   --ok: #2F7A52;        --bad: #B23B3B;}
+.dark {
+  --bg: #0F1E2E;        --surface: #16293C;   --surface-2: #1C334A;
+  --ink: #EDE6D6;       --ink-soft: #9DB0C2;  --accent: #D6A45E;
+  --accent-soft: #3A3120; --border: #27405A;  --nav: #EDE6D6;
+  --nav-ink: #1E3A5F;   --ok: #4CAF7D;        --bad: #E06464;
+}
+/* ── Transición suave modo claro/oscuro ─────────────────── */
+.theme-transitioning,
+.theme-transitioning * {
+  transition:
+    background-color 0.4s ease,
+    color 0.4s ease,
+    border-color 0.4s ease,
+    fill 0.3s ease !important;
+}
+
+/* ── Animación de entrada al cambiar de página ──────────── */
+@keyframes pageIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.page-content {
+  animation: pageIn 0.28s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+body { background: var(--bg); transition: background-color .3s ease, color .3s ease; }
