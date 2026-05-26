@@ -500,38 +500,38 @@ function IterationsTableRaices({
 
   /* ── MÜLLER: i | x₀ | x₁ | x₂ | f(x₂) | xᵣ | εₐ(%) ── */
   if (metodo === 'muller') {
-    return (
-      <table className="w-full text-sm">
-        <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
-          <tr style={{ color: 'var(--ink-soft)' }}>
-            <th className={TH_L}>i</th>
-            <th className={TH_R}>x₀</th>
-            <th className={TH_R}>x₁</th>
-            <th className={TH_R}>x₂</th>
-            <th className={TH_R}>f(x₂)</th>
-            <th className={TH_R}>xᵣ (nueva raíz)</th>
-            <th className={TH_R}>εₐ (%)</th>
-          </tr>
-        </thead>
-        <tbody>
-          {iters.map((it, k) => {
-            const err = it.error ?? null;
-            return (
-              <tr key={k} style={ROW}>
-                <td className={TD_L}>{it.iteracion}</td>
-                <td className={TD_R}>{fmt(it.x0 ?? it.x_0)}</td>
-                <td className={TD_R}>{fmt(it.x1 ?? it.x_1)}</td>
-                <td className={TD_R}>{fmt(it.x2 ?? it.x_2)}</td>
-                <td className={TD_R}>{fmt(it.f_x2 ?? it.fx2 ?? it.f_xi)}</td>
-                <td className={TD_R}>{fmt(it.xi_nuevo ?? it.xr)}</td>
-                <td className={TD_R} style={errStyle(err)}>{fmtErr(err)}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
-    );
-  }
+  return (
+    <table className="w-full text-sm">
+      <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
+        <tr style={{ color: 'var(--ink-soft)' }}>
+          <th className={TH_L}>i</th>
+          <th className={TH_R}>X₀</th>
+          <th className={TH_R}>X₁</th>
+          <th className={TH_R}>X₂</th>
+          <th className={TH_R}>F(X₂)</th>
+          <th className={TH_R}>Xᵣ (nueva raíz)</th>
+          <th className={TH_R}>εₐ (%)</th>
+        </tr>
+      </thead>
+      <tbody>
+        {iters.map((it, k) => {
+          const err = it.error ?? null;
+          return (
+            <tr key={k} style={ROW}>
+              <td className={TD_L}>{it.iteracion}</td>
+              <td className={TD_R}>{fmt(it.x0_actual)}</td>
+              <td className={TD_R}>{fmt(it.x1_actual)}</td>
+              <td className={TD_R}>{fmt(it.x2_actual)}</td>
+              <td className={TD_R}>{fmt(it.paso_2_diferencias_divididas?.f_x2)}</td>
+              <td className={TD_R}>{fmt(it.xi_nuevo)}</td>
+              <td className={TD_R} style={errStyle(err)}>{fmtErr(err)}</td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
+  );
+}
 
   return null;
 }
