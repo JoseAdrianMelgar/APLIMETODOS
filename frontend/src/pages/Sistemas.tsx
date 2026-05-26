@@ -663,6 +663,7 @@ function ResultPanel({
               {chartData.length > 0 && (
                 <ConvergenceChart data={chartData} />
               )}
+              <SeidelSummaryTable steps={seidelSteps} vars={size} />
 
               <div className="space-y-2">
                 <h3 className="font-serif text-sm font-semibold" style={{ color: 'var(--ink)' }}>
@@ -743,6 +744,46 @@ function BackSubSection({ U, tiempo, ops }: { U: number[][], tiempo?: number | n
             ))}
           </div>
         </div>
+      </div>
+    </div>
+  );
+}
+function SeidelSummaryTable({ steps, vars }: { steps: SeidelStep[]; vars: number }) {
+  if (!steps.length) return null;
+  const subs = ['₁','₂','₃','₄','₅','₆'];
+  const fmtErr = (n: number) => {
+    const color = n < 0.01 ? 'var(--ok)' : n < 1 ? '#84cc16' : n < 10 ? '#f59e0b' : 'var(--bad)';
+    return <span style={{ color, fontWeight: n < 0.01 ? 600 : 400 }}>{Math.abs(n).toFixed(6)}%</span>;
+  };
+  return (
+    <div className="overflow-hidden rounded-2xl" style={{ border: '1px solid var(--border)' }}>
+      <div className="max-h-56 overflow-y-auto">
+        <table className="w-full text-sm">
+          <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
+            <tr style={{ color: 'var(--ink-soft)' }}>
+              <th className="px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide">Iteración</th>
+              {Array.from({ length: vars }, (_, i) => (
+                <th key={i} className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">
+                  x{subs[i] ?? i+1}
+                </th>
+              ))}
+              <th className="px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide">Error máx. (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {steps.map((s, k) => (
+              <tr key={k} style={{ borderTop: '1px solid var(--border)', color: 'var(--ink)' }}>
+                <td className="px-4 py-2 font-mono text-sm">{s.iteracion}</td>
+                {Array.from({ length: vars }, (_, i) => (
+                  <td key={i} className="px-4 py-2 text-right font-mono text-sm" style={{ color: 'var(--accent)' }}>
+                    {fmt(s.x_nuevo[i] ?? null)}
+                  </td>
+                ))}
+                <td className="px-4 py-2 text-right font-mono text-sm">{fmtErr(s.error_maximo)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
       </div>
     </div>
   );

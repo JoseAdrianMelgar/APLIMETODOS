@@ -399,6 +399,156 @@ function ResultPending({ jobId,}: { jobId: number;}) {
     </div>
   );
 }
+// Pega esta función justo ANTES de "function ResultPanel(" en Raices.tsx
+
+function IterationsTableRaices({
+  iteraciones,
+  metodo,
+}: {
+  iteraciones: IterationStep[];
+  metodo: string;
+}) {
+  if (!iteraciones?.length) return null;
+
+  const iters = iteraciones as any[];
+
+  const TH_L = 'px-4 py-2 text-left text-xs font-semibold uppercase tracking-wide';
+  const TH_R = 'px-4 py-2 text-right text-xs font-semibold uppercase tracking-wide';
+  const TD_L = 'px-4 py-2 font-mono text-sm';
+  const TD_R = 'px-4 py-2 text-right font-mono text-sm';
+  const ROW  = { borderTop: '1px solid var(--border)', color: 'var(--ink)' };
+
+  const fmtErr = (n: number | null | undefined) => {
+    if (n == null || !isFinite(n as number)) return '—';
+    return `${Math.abs(n as number).toFixed(6)}%`;
+  };
+
+  const errStyle = (n: number | null | undefined): React.CSSProperties => {
+    if (n == null) return { color: 'var(--ink-soft)' };
+    if (n < 0.01)  return { color: 'var(--ok)', fontWeight: 600 };
+    if (n < 1)     return { color: '#84cc16' };
+    if (n < 10)    return { color: '#f59e0b' };
+    return { color: 'var(--bad)' };
+  };
+
+  /* ── NEWTON-RAPHSON: i | xᵢ | f(xᵢ) | f′(xᵢ) | xᵢ₊₁ | εₐ(%) ── */
+  if (metodo === 'newton-raphson') {
+    return (
+      <table className="w-full text-sm">
+        <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
+          <tr style={{ color: 'var(--ink-soft)' }}>
+            <th className={TH_L}>i</th>
+            <th className={TH_R}>xᵢ</th>
+            <th className={TH_R}>f(xᵢ)</th>
+            <th className={TH_R}>f′(xᵢ)</th>
+            <th className={TH_R}>xᵢ₊₁</th>
+            <th className={TH_R}>εₐ (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {iters.map((it, k) => {
+            const err = it.error ?? null;
+            return (
+              <tr key={k} style={ROW}>
+                <td className={TD_L}>{it.iteracion}</td>
+                <td className={TD_R}>{fmt(it.xi_anterior ?? it.xi ?? it.xi_actual)}</td>
+                <td className={TD_R}>{fmt(it.f_xi ?? it.fxi ?? it.f_anterior)}</td>
+                <td className={TD_R}>{fmt(it.f_prima ?? it.derivada ?? it.fpxi)}</td>
+                <td className={TD_R}>{fmt(it.xi_nuevo)}</td>
+                <td className={TD_R} style={errStyle(err)}>{fmtErr(err)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  /* ── SECANTE: i | xᵢ₋₁ | xᵢ | f(xᵢ) | xᵢ₊₁ | εₐ(%) ── */
+  if (metodo === 'secante') {
+    return (
+      <table className="w-full text-sm">
+        <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
+          <tr style={{ color: 'var(--ink-soft)' }}>
+            <th className={TH_L}>i</th>
+            <th className={TH_R}>xᵢ₋₁</th>
+            <th className={TH_R}>xᵢ</th>
+            <th className={TH_R}>f(xᵢ)</th>
+            <th className={TH_R}>xᵢ₊₁</th>
+            <th className={TH_R}>εₐ (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {iters.map((it, k) => {
+            const fxi = it.paso_2_evaluar_funcion_actual?.resultado ?? null;
+            const err = it.error ?? null;
+            return (
+              <tr key={k} style={ROW}>
+                <td className={TD_L}>{it.iteracion}</td>
+                <td className={TD_R}>{fmt(it.xi_anterior)}</td>
+                <td className={TD_R}>{fmt(it.xi_actual)}</td>
+                <td className={TD_R}>{fmt(fxi)}</td>
+                <td className={TD_R}>{fmt(it.xi_nuevo)}</td>
+                <td className={TD_R} style={errStyle(err)}>{fmtErr(err)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  /* ── MÜLLER: i | x₀ | x₁ | x₂ | f(x₂) | xᵣ | εₐ(%) ── */
+  if (metodo === 'muller') {
+    return (
+      <table className="w-full text-sm">
+        <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
+          <tr style={{ color: 'var(--ink-soft)' }}>
+            <th className={TH_L}>i</th>
+            <th className={TH_R}>x₀</th>
+            <th className={TH_R}>x₁</th>
+            <th className={TH_R}>x₂</th>
+            <th className={TH_R}>f(x₂)</th>
+            <th className={TH_R}>xᵣ (nueva raíz)</th>
+            <th className={TH_R}>εₐ (%)</th>
+          </tr>
+        </thead>
+        <tbody>
+          {iters.map((it, k) => {
+            const err = it.error ?? null;
+            return (
+              <tr key={k} style={ROW}>
+                <td className={TD_L}>{it.iteracion}</td>
+                <td className={TD_R}>{fmt(it.x0 ?? it.x_0)}</td>
+                <td className={TD_R}>{fmt(it.x1 ?? it.x_1)}</td>
+                <td className={TD_R}>{fmt(it.x2 ?? it.x_2)}</td>
+                <td className={TD_R}>{fmt(it.f_x2 ?? it.fx2 ?? it.f_xi)}</td>
+                <td className={TD_R}>{fmt(it.xi_nuevo ?? it.xr)}</td>
+                <td className={TD_R} style={errStyle(err)}>{fmtErr(err)}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    );
+  }
+
+  return null;
+}
+
+// ─── Y en ResultPanel reemplaza el bloque {/* tabla de iteraciones */} con esto: ───
+//
+// {result.iteraciones?.length > 0 && (
+//   <div
+//     className="overflow-hidden rounded-2xl"
+//     style={{ border: '1px solid var(--border)' }}
+//   >
+//     <div className="max-h-64 overflow-y-auto">
+//       <IterationsTableRaices iteraciones={result.iteraciones} metodo={job.metodo} />
+//     </div>
+//   </div>
+// )}
+
 
 function ResultPanel({
   job,
@@ -517,39 +667,23 @@ function ResultPanel({
               </ResponsiveContainer>
             </div>
           )}
-
           {/* tabla de iteraciones */}
-          {result.iteraciones?.length > 0 && (
-            <div
-              className="overflow-hidden rounded-2xl"
-              style={{ border: '1px solid var(--border)' }}
-            >
-              <div className="max-h-64 overflow-y-auto">
-                <table className="w-full text-sm">
-                  <thead className="sticky top-0" style={{ background: 'var(--surface-2)' }}>
-                    <tr style={{ color: 'var(--ink-soft)' }}>
-                      <th className="px-4 py-2 text-left font-medium">i</th>
-                      <th className="px-4 py-2 text-right font-medium">xᵢ</th>
-                      <th className="px-4 py-2 text-right font-medium">error</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {result.iteraciones.map((it, k) => (
-                      <tr key={k} style={{ borderTop: '1px solid var(--border)', color: 'var(--ink)' }}>
-                        <td className="px-4 py-2 font-mono">{it.iteracion}</td>
-                        <td className="px-4 py-2 text-right font-mono">{fmt(it.xi_nuevo)}</td>
-                        <td className="px-4 py-2 text-right font-mono" style={{ color: 'var(--ink-soft)' }}>
-                          {fmt(errorOf(it))}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          )}
-        </>
-      )}
+{result.iteraciones?.length > 0 && (
+  <div
+    className="overflow-hidden rounded-2xl"
+    style={{ border: '1px solid var(--border)' }}
+  >
+    <div className="max-h-64 overflow-y-auto">
+      <IterationsTableRaices iteraciones={result.iteraciones} metodo={job.metodo} />
+    </div>
+  </div>
+  )}
+      </>
+    )}
+
+      {/* mensaje de error del job FAILED */}
+
+
 
       {/* mensaje de error del job FAILED */}
       {!isDone && (

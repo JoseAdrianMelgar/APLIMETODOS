@@ -572,11 +572,17 @@ class MetodosNumericos:
                         "iteraciones": iteraciones, "total_iteraciones": len(iteraciones),
                         "convergio": False, "mensaje": f"Error en iteracion {iteracion}: {str(e)}"}
 
+            
             err_max = max(p["error_variable"] for p in pasos_variables)
-            iteraciones.append({
+            iter_entry = {
                 "iteracion": iteracion, "x_anterior": x_anterior,
-                "pasos_por_variable": pasos_variables, "x_nuevo": list(x), "error_maximo": err_max
-            })
+                "pasos_por_variable": pasos_variables, "x_nuevo": list(x),
+                "error_maximo": err_max, "metodo": "gauss-seidel"
+            }
+            for _i in range(n):
+                iter_entry[f"x{_i + 1}"] = round(x[_i], 10)
+            iteraciones.append(iter_entry)
+   
 
         convergio = (not timeout) and (err_max <= tol)
         if convergio:   mensaje = f"Convergencia alcanzada en {iteracion} iteraciones."

@@ -148,7 +148,12 @@ class NumericWorker:
             return
 
         for it in iteraciones:
-            xi_valor  = it.get('xi_nuevo', it.get('x_nuevo'))
+            
+            xi_nuevo = it.get('xi_nuevo')
+
+
+            
+            xi_valor = xi_nuevo if xi_nuevo is not None else it.get('x_nuevo')
             error_valor = it.get('error', it.get('error_maximo', 0))
 
             if isinstance(xi_valor, list):

@@ -18,13 +18,7 @@ class DatabaseManager:
             raise
 
     def ensure_connection(self):
-        """
-        Verifica que la conexión esté viva y reconecta si está caída.
-
-        Esta es la pieza clave contra el bug de 'todos los jobs en Pending para
-        siempre': si la conexión a SQL muere (colapso parcial), el worker la
-        recupera en vez de quedar inutilizado.
-        """
+        """Verifica que la conexión esté viva y reconecta si está caída."""
         try:
             if self.conn is None:
                 self.connect()
@@ -98,24 +92,28 @@ class DatabaseManager:
 
     def save_result(self, job_id: int, resultado: Dict[str, Any],
                     tiempo_ms: int):
-        """
-        Guarda el resultado final del job (completo, con iteraciones, para que
-        el frontend renderice grafica + tabla desde el campo Resultado).
-        """
+        """Guarda el resultado final del job."""
         cursor = self.conn.cursor()
 
         converged = resultado.get('convergio', False)
         resultado_json = json.dumps(resultado, default=str, ensure_ascii=False)
 
+        # Extrae solo la solución final como array para ResultadoFinal
+        solucion = resultado.get('solucion')
+        resultado_final_json = (
+            json.dumps(solucion, default=str) if solucion else None
+        )
+
         cursor.execute("""
             UPDATE Jobs
             SET Estado = 'DONE',
                 Resultado = ?,
+                ResultadoFinal = ?,
                 Converged = ?,
                 TiempoEjecucionMs = ?,
                 FechaFin = GETDATE()
             WHERE Id = ?
-        """, resultado_json, converged, tiempo_ms, job_id)
+        """, resultado_json, resultado_final_json, converged, tiempo_ms, job_id)
 
         self.conn.commit()
 
@@ -142,6 +140,7 @@ class DatabaseManager:
         cursor.execute("""
             INSERT INTO JobIterations (JobId, Iteracion, Xi, Error, DatosAdicionales)
             VALUES (?, ?, ?, ?, ?)
-        """, job_id, iteracion, xi_str, error, json.dumps(datos_adicionales, default=str, ensure_ascii=False))
+        """, job_id, iteracion, xi_str, error,
+            json.dumps(datos_adicionales, default=str, ensure_ascii=False))
 
         self.conn.commit()

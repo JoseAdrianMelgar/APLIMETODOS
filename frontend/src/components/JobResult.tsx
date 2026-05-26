@@ -161,8 +161,242 @@ function ConvergenceChart({ resultado }: { resultado: NumericResult }) {
 }
 
 /** Tabla de iteraciones (parciales o completas). */
-function IterationsTable({ resultado }: { resultado: NumericResult }) {
+function IterationsTable({ resultado, method }: { resultado: NumericResult; method: string }) {
   if (!resultado.iteraciones || resultado.iteraciones.length === 0) return null;
+
+  const iters = resultado.iteraciones as any[];
+
+  /* ── helpers ── */
+  const fmt = (n: number | null | undefined, d = 8): string => {
+    if (n == null) return '—';
+    const abs = Math.abs(n);
+    if (abs !== 0 && abs < 1e-4) return n.toExponential(4);
+    return n.toFixed(d);
+  };
+  const fmtErr = (n: number | null | undefined): string =>
+    n == null ? '—' : `${Math.abs(n).toFixed(6)}%`;
+  const errColor = (n: number | null | undefined): string => {
+    if (n == null) return 'text-slate-400';
+    if (n < 0.01) return 'text-emerald-400 font-semibold';
+    if (n < 1)    return 'text-lime-400';
+    if (n < 10)   return 'text-amber-400';
+    return 'text-rose-400';
+  };
+
+  /* ── estilos compartidos ── */
+  const TH = 'px-3 py-2 text-xs font-semibold text-slate-300 text-right';
+  const THL = 'px-3 py-2 text-xs font-semibold text-slate-300 text-left';
+  const TD = 'px-3 py-2 font-mono text-xs text-slate-200 text-right';
+  const TDC = 'px-3 py-2 font-mono text-xs text-cyan-300 text-right';
+  const TDI = 'px-3 py-2 font-mono text-xs text-slate-400 text-left';
+  const ROW = 'border-t border-slate-800 hover:bg-slate-800/60 transition-colors';
+
+  /* ── tablas por método ── */
+  const renderContent = () => {
+    // ── NEWTON-RAPHSON ──────────────────────────────────────────────
+    // Columnas: i | xᵢ | f(xᵢ) | f′(xᵢ) | xᵢ₊₁ | εₐ (%)
+    if (method === 'newton-raphson') {
+      return (
+        <>
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className={THL}>i</th>
+              <th className={TH}>xᵢ</th>
+              <th className={TH}>f(xᵢ)</th>
+              <th className={TH}>f′(xᵢ)</th>
+              <th className={TH}>xᵢ₊₁</th>
+              <th className={TH}>εₐ (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {iters.map((it) => {
+              const err = it.error ?? null;
+              return (
+                <tr key={it.iteracion} className={ROW}>
+                  <td className={TDI}>{it.iteracion}</td>
+                  <td className={TD}>{fmt(it.xi_anterior ?? it.xi ?? it.xi_actual)}</td>
+                  <td className={TD}>{fmt(it.f_xi ?? it.fxi ?? it.f_anterior)}</td>
+                  <td className={TD}>{fmt(it.f_prima ?? it.derivada ?? it.fpxi)}</td>
+                  <td className={TDC}>{fmt(it.xi_nuevo)}</td>
+                  <td className={`${TH} ${errColor(err)}`}>{fmtErr(err)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </>
+      );
+    }
+
+    // ── SECANTE ─────────────────────────────────────────────────────
+    // Columnas: i | xᵢ₋₁ | xᵢ | f(xᵢ) | xᵢ₊₁ | εₐ (%)
+    if (method === 'secante') {
+      return (
+        <>
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className={THL}>i</th>
+              <th className={TH}>xᵢ₋₁</th>
+              <th className={TH}>xᵢ</th>
+              <th className={TH}>f(xᵢ)</th>
+              <th className={TH}>xᵢ₊₁</th>
+              <th className={TH}>εₐ (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {iters.map((it) => {
+              const fxi = it.paso_2_evaluar_funcion_actual?.resultado ?? null;
+              const err = it.error ?? null;
+              return (
+                <tr key={it.iteracion} className={ROW}>
+                  <td className={TDI}>{it.iteracion}</td>
+                  <td className={TD}>{fmt(it.xi_anterior)}</td>
+                  <td className={TD}>{fmt(it.xi_actual)}</td>
+                  <td className={TD}>{fmt(fxi)}</td>
+                  <td className={TDC}>{fmt(it.xi_nuevo)}</td>
+                  <td className={`${TH} ${errColor(err)}`}>{fmtErr(err)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </>
+      );
+    }
+
+    // ── MÜLLER ──────────────────────────────────────────────────────
+    // Columnas: i | x₀ | x₁ | x₂ | f(x₂) | xᵣ | εₐ (%)
+    if (method === 'muller') {
+      return (
+        <>
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className={THL}>i</th>
+              <th className={TH}>x₀</th>
+              <th className={TH}>x₁</th>
+              <th className={TH}>x₂</th>
+              <th className={TH}>f(x₂)</th>
+              <th className={TH}>xᵣ (nueva raíz)</th>
+              <th className={TH}>εₐ (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {iters.map((it) => {
+              const err = it.error ?? null;
+              return (
+                <tr key={it.iteracion} className={ROW}>
+                  <td className={TDI}>{it.iteracion}</td>
+                  <td className={TD}>{fmt(it.x0 ?? it.x_0)}</td>
+                  <td className={TD}>{fmt(it.x1 ?? it.x_1)}</td>
+                  <td className={TD}>{fmt(it.x2 ?? it.x_2)}</td>
+                  <td className={TD}>{fmt(it.f_x2 ?? it.fx2 ?? it.f_xi)}</td>
+                  <td className={TDC}>{fmt(it.xi_nuevo ?? it.xr)}</td>
+                  <td className={`${TH} ${errColor(err)}`}>{fmtErr(err)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </>
+      );
+    }
+
+    // ── GAUSS-SEIDEL ─────────────────────────────────────────────────
+    // Columnas: Iteración | x₁ | x₂ | x₃ | Error máx. (%)
+    // Dinámico: detecta cuántas variables tiene x_nuevo
+    if (method === 'gauss-seidel') {
+      const nVars = Array.isArray(iters[0]?.x_nuevo) ? iters[0].x_nuevo.length : 3;
+      const subs  = ['₁','₂','₃','₄','₅','₆'];
+      return (
+        <>
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className={THL}>Iteración</th>
+              {Array.from({ length: nVars }, (_, i) => (
+                <th key={i} className={TH}>x{subs[i] ?? i + 1}</th>
+              ))}
+              <th className={TH}>Error máx. (%)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {iters.map((it) => {
+              const xNew: number[] = Array.isArray(it.x_nuevo) ? it.x_nuevo : [];
+              const err = it.error_maximo ?? null;
+              return (
+                <tr key={it.iteracion} className={ROW}>
+                  <td className={TDI}>{it.iteracion}</td>
+                  {Array.from({ length: nVars }, (_, i) => (
+                    <td key={i} className={TDC}>{fmt(xNew[i] ?? null)}</td>
+                  ))}
+                  <td className={`${TH} ${errColor(err)}`}>{fmtErr(err)}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </>
+      );
+    }
+
+    // ── GAUSS / GAUSS-JORDAN ─────────────────────────────────────────
+    // Métodos directos. Cuando el backend guarde X1,X2,X3 en x_nuevo,
+    // aparecen automáticamente. Mientras tanto: mensaje informativo.
+    if (method === 'gauss' || method === 'gauss-jordan') {
+      const hasVec = iters.some((it) => Array.isArray(it.x_nuevo) && it.x_nuevo.length > 0);
+      const subs   = ['₁','₂','₃','₄','₅','₆'];
+      const nVars  = hasVec
+        ? (iters.find((it) => Array.isArray(it.x_nuevo))?.x_nuevo?.length ?? 3)
+        : 3;
+
+      if (!hasVec) {
+        return (
+          <tbody>
+            <tr>
+              <td colSpan={5} className="px-6 py-6 text-center">
+                <p className="text-slate-500 text-sm">Método directo — sin iteraciones de convergencia.</p>
+                <p className="text-slate-600 text-xs mt-1">
+                  El vector solución aparece en la sección "Vector solución" de arriba.
+                </p>
+              </td>
+            </tr>
+          </tbody>
+        );
+      }
+
+      return (
+        <>
+          <thead className="bg-slate-800 sticky top-0 z-10">
+            <tr>
+              <th className={THL}>Paso</th>
+              {Array.from({ length: nVars }, (_, i) => (
+                <th key={i} className={TH}>x{subs[i] ?? i + 1}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {iters.map((it) => {
+              const xNew: number[] = Array.isArray(it.x_nuevo) ? it.x_nuevo : [];
+              return (
+                <tr key={it.iteracion} className={ROW}>
+                  <td className={TDI}>{it.iteracion}</td>
+                  {Array.from({ length: nVars }, (_, i) => (
+                    <td key={i} className={TDC}>{fmt(xNew[i] ?? null)}</td>
+                  ))}
+                </tr>
+              );
+            })}
+          </tbody>
+        </>
+      );
+    }
+
+    // ── fallback ─────────────────────────────────────────────────────
+    return (
+      <tbody>
+        <tr>
+          <td colSpan={5} className="px-3 py-4 text-center text-slate-500 text-sm">
+            Método no reconocido: <code className="font-mono">{method}</code>
+          </td>
+        </tr>
+      </tbody>
+    );
+  };
 
   return (
     <div className="fade-in-up stagger-4">
@@ -172,48 +406,13 @@ function IterationsTable({ resultado }: { resultado: NumericResult }) {
       </h3>
       <div className="bg-slate-900 rounded-lg overflow-hidden max-h-72 overflow-y-auto border border-slate-700">
         <table className="w-full text-sm">
-          <thead className="bg-slate-800 sticky top-0 z-10">
-            <tr>
-              <th className="px-3 py-2 text-left text-slate-300 font-semibold">i</th>
-              <th className="px-3 py-2 text-left text-slate-300 font-semibold">xᵢ</th>
-              <th className="px-3 py-2 text-left text-slate-300 font-semibold">error %</th>
-            </tr>
-          </thead>
-          <tbody>
-            {resultado.iteraciones.map((it) => {
-              let xi: string = '—';
-              if (typeof it.xi_nuevo === 'number') {
-                xi = it.xi_nuevo.toFixed(6);
-              } else if (typeof it.xi_nuevo === 'string') {
-                xi = it.xi_nuevo;
-              } else if (Array.isArray(it.x_nuevo)) {
-                xi = `[${it.x_nuevo.map((v) => v.toFixed(4)).join(', ')}]`;
-              }
-
-              const err =
-                typeof it.error === 'number'
-                  ? it.error.toFixed(4)
-                  : typeof it.error_maximo === 'number'
-                    ? it.error_maximo.toFixed(4)
-                    : '—';
-
-              return (
-                <tr
-                  key={it.iteracion}
-                  className="border-t border-slate-800 transition-colors hover:bg-slate-800/60"
-                >
-                  <td className="px-3 py-2 text-slate-400 font-mono">{it.iteracion}</td>
-                  <td className="px-3 py-2 font-mono text-slate-200">{xi}</td>
-                  <td className="px-3 py-2 font-mono text-cyan-300">{err}</td>
-                </tr>
-              );
-            })}
-          </tbody>
+          {renderContent()}
         </table>
       </div>
     </div>
   );
 }
+
 
 function JobResult({ jobId }: JobResultProps) {
   const { job, error } = useJobPolling(jobId);
@@ -326,7 +525,7 @@ function JobResult({ jobId }: JobResultProps) {
                 </div>
               </div>
               <ConvergenceChart resultado={resultado} />
-              <IterationsTable resultado={resultado} />
+              <IterationsTable resultado={resultado} method={job.metodo} />
             </>
           )}
         </div>
@@ -448,7 +647,7 @@ function JobResult({ jobId }: JobResultProps) {
 
           {/* GRÁFICA + TABLA */}
           {resultado && <ConvergenceChart resultado={resultado} />}
-          {resultado && <IterationsTable resultado={resultado} />}
+          {resultado && <IterationsTable resultado={resultado} method={job.metodo} />}
 
           {/*
             Mensaje al fondo: solo cuando convergió.
