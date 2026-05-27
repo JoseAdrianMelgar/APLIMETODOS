@@ -98,22 +98,15 @@ class DatabaseManager:
         converged = resultado.get('convergio', False)
         resultado_json = json.dumps(resultado, default=str, ensure_ascii=False)
 
-        # Extrae solo la solución final como array para ResultadoFinal
-        solucion = resultado.get('solucion')
-        resultado_final_json = (
-            json.dumps(solucion, default=str) if solucion else None
-        )
-
         cursor.execute("""
             UPDATE Jobs
             SET Estado = 'DONE',
                 Resultado = ?,
-                ResultadoFinal = ?,
                 Converged = ?,
                 TiempoEjecucionMs = ?,
                 FechaFin = GETDATE()
             WHERE Id = ?
-        """, resultado_json, resultado_final_json, converged, tiempo_ms, job_id)
+        """, resultado_json, converged, tiempo_ms, job_id)
 
         self.conn.commit()
 
