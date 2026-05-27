@@ -12,6 +12,7 @@ MAX_ITER_CAP = 1000
 MAX_SECONDS  = 15
 MAX_FUNC_LEN = 120
 RESIDUO_MAX  = 1.0
+PICO_DISCONTINUIDAD = 1e3   # si |f(x)| supera esto, hubo cercania a una asintota/polo
 
 
 class MetodosNumericos:
@@ -19,9 +20,29 @@ class MetodosNumericos:
     def __init__(self):
         self.x = sp.symbols('x')
 
+    @staticmethod
+    def _normalize_funcion(s: str) -> str:
+        """Normaliza notación unicode y alternativa antes de parsear."""
+        UNICODE_SUP = {'⁰':'**0','¹':'**1','²':'**2','³':'**3','⁴':'**4',
+                       '⁵':'**5','⁶':'**6','⁷':'**7','⁸':'**8','⁹':'**9'}
+        for u, r in UNICODE_SUP.items():
+            s = s.replace(u, r)
+        return (s.replace('^', '**')
+                 .replace('×', '*')
+                 .replace('÷', '/'))
+
     def _parse_funcion(self, funcion_str):
-        funcion_procesada = re.sub(r'\be\b', 'E', funcion_str)
-        return sp.sympify(funcion_procesada)
+        try:
+            normalizada = self._normalize_funcion(funcion_str)
+            normalizada = re.sub(r'\be\b', 'E', normalizada)
+            return sp.sympify(normalizada)
+        except Exception:
+            raise ValueError(
+                f"Función inválida: '{funcion_str}'. "
+                "Usa ^ para potencias (x^3), * para multiplicar (2*x) "
+                "y funciones como sin(x), cos(x), exp(x), ln(x), sqrt(x)."
+            )
+                
 
     @staticmethod
     def _clamp_iter(max_iter):
@@ -139,20 +160,15 @@ class MetodosNumericos:
             f_sust  = f_expr.subs(self.x, x_ant)
             df_sust = df_expr.subs(self.x, x_ant)
             iteraciones.append({
-                "iteracion": iteracion, "xi_anterior": x_ant,
-                "paso_1_evaluar_funcion": {"expresion": f"f({x_ant}) = {f_sust}", "resultado": f_xi},
-                "paso_2_evaluar_derivada": {"expresion": f"f'({x_ant}) = {df_sust}", "resultado": df_xi},
-                "paso_3_aplicar_formula": {
-                    "formula": "x_{i+1} = x_i - f(x_i) / f'(x_i)",
-                    "sustitucion": f"x_{iteracion} = {x_ant} - ({f_xi} / {df_xi})",
-                    "cociente": cociente, "resultado": x_n
-                },
-                "paso_4_calcular_error": {
-                    "formula": "error = |(x_nuevo - x_anterior) / x_nuevo| * 100%",
-                    "sustitucion": f"error = |({x_n} - {x_ant}) / {x_n}| * 100%", "resultado": err
-                },
-                "xi_nuevo": x_n, "error": err
-            })
+            "iteracion": iteracion, "xi_anterior": x_ant,
+            "paso_1_evaluar_funcion": {"expresion": f"f({x_ant}) = {f_sust}", "resultado": f_xi},
+            "paso_2_evaluar_derivada": {"expresion": f"f'({x_ant}) = {df_sust}", "resultado": df_xi},
+            "paso_3_aplicar_formula": { ... },
+            "paso_4_calcular_error": { ... },
+            "xi_nuevo": x_n, "error": err,
+            "f_xi":    f_xi,    # ← AGREGAR: la tabla lee esto
+            "f_prima": df_xi,   # ← AGREGAR: la tabla lee esto
+        })
 
         convergio = (not timeout) and (err <= tol)
 
@@ -182,6 +198,20 @@ class MetodosNumericos:
 
     # =====================================================================
     # MÉTODO 2: SECANTE
+    # =====================================================================
+    # =====================================================================
+#  IMPORTANTE: arriba de tu archivo, junto a las otras constantes
+#  (donde esta RESIDUO_MAX = 1.0), agrega esta linea UNA sola vez:
+#
+#      PICO_DISCONTINUIDAD = 1e3
+#
+#  Luego selecciona TODA tu funcion "def secante(...)" actual
+#  (desde la linea "def secante" hasta su "return {...}" final)
+#  y reemplazala por esta version completa de abajo.
+# =====================================================================
+
+    # =====================================================================
+    # MÉTODO 2: SECANTE  (con Opción A: advertencia de discontinuidad)
     # =====================================================================
     def secante(self, funcion_str, x0, x1, tol=0.001, max_iter=100):
         iteraciones = []
@@ -213,6 +243,7 @@ class MetodosNumericos:
         err = 100.0
         iteracion = 0
         timeout = False
+        f_pico = 0.0   # rastrea el mayor |f(x)| visto (para detectar asintotas)
 
         while err > tol and iteracion < max_iter:
             if time.time() - t_inicio > MAX_SECONDS:
@@ -231,6 +262,8 @@ class MetodosNumericos:
                         "convergio": False,
                         "mensaje": f"Valor no finito en iteracion {iteracion}. La funcion diverge o tiene una discontinuidad."
                     }
+
+                f_pico = max(f_pico, abs(f_x_ant), abs(f_x_act))
 
                 denominador = f_x_act - f_x_ant
                 if abs(denominador) < 1e-12:
@@ -283,6 +316,7 @@ class MetodosNumericos:
             x_act = x_nuevo
 
         convergio = (not timeout) and (err <= tol)
+        advertencia = None
         if convergio:
             try:
                 f_final = f(x_act)
@@ -293,6 +327,11 @@ class MetodosNumericos:
                 mensaje = f"El paso es muy pequeno pero f(x) = {f_final} no es cercano a cero: posible discontinuidad."
             else:
                 mensaje = f"Convergencia alcanzada en {iteracion} iteraciones."
+                if f_pico > PICO_DISCONTINUIDAD:
+                    advertencia = (f"Durante el calculo se detectaron valores muy grandes de f(x) "
+                                   f"(maximo |f| = {f_pico:.2e}), lo que sugiere cercania a una asintota "
+                                   f"o discontinuidad. La raiz encontrada es una raiz real valida.")
+                    mensaje += " [Advertencia: posible cercania a una discontinuidad.]"
         elif timeout:
             mensaje = f"Tiempo de calculo excedido ({MAX_SECONDS}s)."
         else:
@@ -303,7 +342,7 @@ class MetodosNumericos:
             "formula_general": "x_{i+1} = x_i - [f(x_i)*(x_i - x_{i-1})] / [f(x_i) - f(x_{i-1})]",
             "valor_inicial_x0": float(x0), "valor_inicial_x1": float(x1), "tolerancia": tol,
             "iteraciones": iteraciones, "total_iteraciones": iteracion,
-            "convergio": convergio, "mensaje": mensaje
+            "convergio": convergio, "advertencia": advertencia, "mensaje": mensaje
         }
 
     # =====================================================================

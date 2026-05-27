@@ -350,7 +350,20 @@ export default function Sistemas() {
 
   async function handleSubmit() {
     setSubmitError(null);
-    setSubmitting(true);
+
+    // E-05: validar celdas antes del POST
+    for (let i = 0; i < size; i++) {
+      for (let j = 0; j <= size; j++) {
+        const val = cells[i][j].trim();
+        const col = j < size ? `col ${j + 1}` : 'vector b';
+        if (val === '')
+          return setSubmitError(`Celda vacía en F${i + 1}, ${col}. Completa toda la matriz.`);
+        if (!isFinite(Number(val)))
+          return setSubmitError(`"${val}" no es un número válido (F${i + 1}, ${col}).`);
+      }
+    }
+
+    setSubmitting(true);  
     try {
       const A = cells.map((row) => row.slice(0, size).map(Number));
       const b = cells.map((row) => Number(row[size]));
