@@ -19,13 +19,13 @@ APLIMETODOS es una plataforma distribuida que ejecuta métodos numéricos de for
 El sistema se compone de **5 servicios dockerizados** que se comunican mediante red interna:
 
 ```
-  ┌──────────┐        ┌──────────┐        ┌──────────┐
+  ┌──────────┐       ┌──────────┐        ┌──────────┐
   │ Frontend │ HTTP→ │ API .NET │ RPUSH→ │  Redis   │
   │  React   │       │   10     │        │    7     │
   └──────────┘       └────┬─────┘        └────┬─────┘
                           │ SQL                │ BLPOP
                           ↓                    ↓
-                    ┌──────────┐        ┌──────────┐
+                    ┌──────────┐       ┌──────────┐
                     │SQL Server│←──────│  Worker  │
                     │   2022   │ INSERT│  Python  │
                     └──────────┘       └──────────┘
@@ -139,9 +139,9 @@ APLIMETODOS/
 
 | Método | Parámetros | Estado |
 |---|---|---|
-| Gauss | `A`, `b` | 🔄 En desarrollo |
+| Gauss        | `A`, `b` | ✅ |
 | Gauss-Seidel | `A`, `b`, `x_inicial`, `tol`, `max_iter` | ✅ |
-| Gauss-Jordan | `A`, `b` | 🔄 En desarrollo |
+| Gauss-Jordan | `A`, `b` | ✅ |
 
 Cada método retorna el paso a paso iteración por iteración con fórmula general, sustitución de valores y resultado.
 
