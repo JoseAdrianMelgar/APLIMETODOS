@@ -95,6 +95,7 @@ Una vez levantado:
 ## Estructura del repositorio
 
 ```
+Estructura del repositorio
 APLIMETODOS/
 ├── api-dotnet/           # API .NET 10 + Dockerfile
 │   ├── APLIMETODOS.sln
@@ -105,7 +106,16 @@ APLIMETODOS/
 │       └── Services/
 ├── worker-python/        # Worker Python + Dockerfile
 │   ├── worker.py
-│   ├── metodos_numericos.py
+│   ├── metodos/          # Paquete modular: un método numérico por archivo
+│   │   ├── __init__.py        # Fachada MetodosNumericos (delega a cada módulo)
+│   │   ├── base.py            # Constantes y helpers compartidos
+│   │   ├── newton_raphson.py
+│   │   ├── secante.py
+│   │   ├── muller.py
+│   │   ├── gauss.py
+│   │   ├── gauss_seidel.py
+│   │   └── gauss_jordan.py
+│   ├── metodos_numericos.py   # Alias que re-exporta el paquete modular
 │   ├── database.py
 │   ├── redis_client.py
 │   └── config.py
@@ -121,7 +131,6 @@ APLIMETODOS/
 ├── docker-compose.yml    # Orquestación de los 5 servicios
 ├── .env.example          # Plantilla de variables de entorno
 └── .gitignore
-```
 
 ---
 
