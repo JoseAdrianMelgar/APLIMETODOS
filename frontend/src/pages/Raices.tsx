@@ -601,7 +601,23 @@ function ResultPanel({
       </div>
 
       {isDone && result && (
-        <>
+        <>{/* BANNER: no convergió → sin raíz real */}
+{!result.convergio && result.raiz == null && (
+  <div
+    className="rounded-2xl px-4 py-3 flex items-start gap-2"
+    style={{ background: 'rgba(217,119,6,0.1)', border: '1px solid rgba(217,119,6,0.3)' }}
+  >
+    <span style={{ color: '#f59e0b', fontSize: 18 }}>⚠</span>
+    <div>
+      <p className="text-sm font-semibold" style={{ color: '#fbbf24' }}>
+        No se encontró raíz real
+      </p>
+      <p className="text-xs mt-0.5" style={{ color: 'var(--ink-soft)' }}>
+        {result.mensaje ?? 'El método no convergió. La función podría no tener raíces reales en esta región.'}
+      </p>
+    </div>
+  </div>
+        )}
           {/* raiz encontrada */}
           {result.raiz != null && (
             <div
