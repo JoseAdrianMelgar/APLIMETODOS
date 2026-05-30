@@ -74,8 +74,15 @@ def newton_raphson(funcion_str, x0, tol=0.001, max_iter=100, derivada_str=None):
             "iteracion": iteracion, "xi_anterior": x_ant,
             "paso_1_evaluar_funcion": {"expresion": f"f({x_ant}) = {f_sust}", "resultado": f_xi},
             "paso_2_evaluar_derivada": {"expresion": f"f'({x_ant}) = {df_sust}", "resultado": df_xi},
-            "paso_3_aplicar_formula": { ... },
-            "paso_4_calcular_error": { ... },
+            "paso_3_aplicar_formula": {
+                "formula": "x_{i+1} = x_i - f(x_i) / f'(x_i)",
+                "sustitucion": f"x_{iteracion} = {x_ant} - ({f_xi}) / ({df_xi})",
+                "cociente": cociente, "resultado": x_n
+            },
+            "paso_4_calcular_error": {
+                "formula": "error = |(x_nuevo - x_anterior) / x_nuevo| * 100%",
+                "sustitucion": f"error = |({x_n} - {x_ant}) / {x_n}| * 100%", "resultado": err
+            },
             "xi_nuevo": x_n, "error": err,
             "f_xi":    f_xi,
             "f_prima": df_xi,
