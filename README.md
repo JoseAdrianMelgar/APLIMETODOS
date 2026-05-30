@@ -105,7 +105,16 @@ APLIMETODOS/
 │       └── Services/
 ├── worker-python/        # Worker Python + Dockerfile
 │   ├── worker.py
-│   ├── metodos_numericos.py
+│   ├── metodos/          # Paquete modular: un método numérico por archivo
+│   │   ├── __init__.py        # Fachada MetodosNumericos (delega a cada módulo)
+│   │   ├── base.py            # Constantes y helpers compartidos
+│   │   ├── newton_raphson.py
+│   │   ├── secante.py
+│   │   ├── muller.py
+│   │   ├── gauss.py
+│   │   ├── gauss_seidel.py
+│   │   └── gauss_jordan.py
+│   ├── metodos_numericos.py   # Alias que re-exporta el paquete modular
 │   ├── database.py
 │   ├── redis_client.py
 │   └── config.py
@@ -122,7 +131,6 @@ APLIMETODOS/
 ├── .env.example          # Plantilla de variables de entorno
 └── .gitignore
 ```
-
 ---
 
 ## Métodos numéricos disponibles
@@ -171,6 +179,7 @@ curl -X POST http://localhost:5000/api/jobs \
     }
   }'
 ```
+   
 
 ---
 
@@ -276,6 +285,7 @@ Proyecto desarrollado por estudiantes de Ingeniería en Sistemas de la Universid
 | 1790-24-26929 | Bayrón Esau Morales Mazariegos |
 | 1790-24-20456 | César Gustavo Castillo García |
 | 1790-24-15648 | Nathalie María Amalia Carbajal García |
+| 1790-24-8668  | Eduardo Leonel Monzon Lopez |
 
 GitHub del proyecto: [JoseAdrianMelgar/APLIMETODOS](https://github.com/JoseAdrianMelgar/APLIMETODOS)
 
